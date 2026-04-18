@@ -3,7 +3,6 @@ import 'package:medisync_doctor/features/auth_onboarding/domain/entities/clinic_
 /// Abstract contract for all clinic data operations.
 abstract interface class ClinicRepository {
   /// Creates a new clinic document and updates the doctor's clinicIds list.
-  /// Throws on failure.
   Future<ClinicEntity> createClinic({
     required String doctorId,
     required String clinicName,
@@ -20,4 +19,7 @@ abstract interface class ClinicRepository {
 
   /// Fetches a single clinic by ID.
   Future<ClinicEntity?> getClinicById(String clinicId);
+
+  /// Returns a real-time stream of a single clinic document.
+  Stream<ClinicEntity?> watchClinicById(String clinicId);
 }

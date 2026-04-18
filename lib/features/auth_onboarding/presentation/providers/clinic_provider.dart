@@ -1,4 +1,7 @@
+import 'dart:async';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:medisync_doctor/core/constants/app_constants.dart';
 import 'package:medisync_doctor/features/auth_onboarding/domain/entities/clinic_entity.dart';
 import 'package:medisync_doctor/features/auth_onboarding/domain/usecases/create_clinic.dart';
 import 'package:medisync_doctor/features/auth_onboarding/presentation/providers/auth_provider.dart';
@@ -39,15 +42,32 @@ final myClinicsProvider =
       .watchStaffClinics(staff.clinicIds);
 });
 
-/// Currently selected clinic entity (resolved from the local persist).
+/// Currently selected clinic entity — FIXED to be a real-time Stream.
 final currentClinicProvider =
-    FutureProvider.autoDispose<ClinicEntity?>((ref) async {
+    StreamProvider.autoDispose<ClinicEntity?>((ref) {
   final staff = ref.watch(currentStaffSyncProvider);
-  if (staff == null) return null;
-  final clinicId = staff.currentClinicId ??
-      await ref.watch(inviteRepositoryProvider).getCurrentClinic();
-  if (clinicId == null) return null;
-  return ref.watch(clinicRepositoryProvider).getClinicById(clinicId);
+  if (staff == null) return Stream.value(null);
+
+  final controller = StreamController<ClinicEntity?>();
+
+  // 1. Get the local clinic ID
+  ref.read(inviteRepositoryProvider).getCurrentClinic().then((localId) {
+    final finalId = staff.currentClinicId ?? localId;
+    if (finalId == null) {
+      controller.add(null);
+      return;
+    }
+
+    // 2. Listen to real-time changes of that specific clinic
+    final sub = ref.read(clinicRepositoryProvider).watchClinicById(finalId).listen(
+      (clinic) => controller.add(clinic),
+      onError: (e) => controller.addError(e),
+    );
+
+    ref.onDispose(() => sub.cancel());
+  });
+
+  return controller.stream;
 });
 
 // ── Clinic creation notifier ──────────────────────────────────────────────────
@@ -82,6 +102,34 @@ class ClinicNotifier extends AsyncNotifier<void> {
     state = await AsyncValue.guard(
       () => ref.read(switchClinicProvider).call(clinicId),
     );
+  }
+
+  /// Starts the clinic session, allowing patients to join the queue.
+  Future<void> startSession(String clinicId) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await FirebaseFirestore.instance
+          .collection(FirestoreCollections.clinics)
+          .doc(clinicId)
+          .update({
+        'isSessionActive': true,
+        'totalTokensIssuedToday': 0,
+        'serviceStartTime': FieldValue.serverTimestamp(),
+      });
+    });
+  }
+
+  /// Ends the clinic session.
+  Future<void> endSession(String clinicId) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      await FirebaseFirestore.instance
+          .collection(FirestoreCollections.clinics)
+          .doc(clinicId)
+          .update({
+        'isSessionActive': false,
+      });
+    });
   }
 }
 

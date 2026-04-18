@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
+import 'package:medisync_doctor/core/router/app_router.dart';
 import 'package:medisync_doctor/core/theme/app_colors.dart';
 import 'package:medisync_doctor/core/utils/validators.dart';
 import 'package:medisync_doctor/core/widgets/app_button.dart';
@@ -13,7 +14,6 @@ import 'package:medisync_doctor/features/auth_onboarding/presentation/providers/
 import 'package:medisync_doctor/features/auth_onboarding/presentation/providers/clinic_provider.dart';
 import 'package:medisync_doctor/features/auth_onboarding/presentation/widgets/auth_form_card.dart';
 
-/// Doctor-only screen to create their first (or additional) clinic.
 class ClinicCreationScreen extends ConsumerStatefulWidget {
   const ClinicCreationScreen({super.key});
 
@@ -29,7 +29,9 @@ class _ClinicCreationScreenState
   final _addressCtrl = TextEditingController();
   final _latCtrl = TextEditingController();
   final _lngCtrl = TextEditingController();
+  
   bool _isLocating = false;
+  bool _isVerifyingAddress = false;
 
   @override
   void dispose() {
@@ -40,24 +42,48 @@ class _ClinicCreationScreenState
     super.dispose();
   }
 
+  /// NEW: Resolves Coordinates from a manually typed address (Forward Geocoding)
+  Future<void> _verifyAddress() async {
+    final address = _addressCtrl.text.trim();
+    if (address.isEmpty || address.length < 10) return;
+
+    setState(() => _isVerifyingAddress = true);
+    try {
+      List<Location> locations = await locationFromAddress(address);
+      if (locations.isNotEmpty) {
+        final loc = locations.first;
+        _latCtrl.text = loc.latitude.toString();
+        _lngCtrl.text = loc.longitude.toString();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Address verified and mapped! ✅'),
+              backgroundColor: AppColors.success,
+              duration: Duration(seconds: 2),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('Geocoding error: $e');
+      // If forward geocoding fails, we don't block the user, 
+      // but they might need to enter coords manually or use GPS.
+    } finally {
+      if (mounted) setState(() => _isVerifyingAddress = false);
+    }
+  }
+
   Future<void> _fetchCurrentLocation() async {
     setState(() => _isLocating = true);
     try {
       bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        throw 'Location services are disabled.';
-      }
+      if (!serviceEnabled) throw 'Location services are disabled.';
 
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) {
-          throw 'Location permissions are denied';
-        }
-      }
-
-      if (permission == LocationPermission.deniedForever) {
-        throw 'Location permissions are permanently denied, we cannot request permissions.';
+        if (permission == LocationPermission.denied) throw 'Location permissions are denied';
       }
 
       final position = await Geolocator.getCurrentPosition(
@@ -67,7 +93,6 @@ class _ClinicCreationScreenState
       _latCtrl.text = position.latitude.toString();
       _lngCtrl.text = position.longitude.toString();
 
-      // Reverse geocode to get address
       List<Placemark> placemarks = await placemarkFromCoordinates(
         position.latitude,
         position.longitude,
@@ -75,17 +100,10 @@ class _ClinicCreationScreenState
 
       if (placemarks.isNotEmpty) {
         final p = placemarks.first;
-        final address = [
+        _addressCtrl.text = [
           if (p.name != null && p.name != p.street) p.name,
-          p.street,
-          p.subLocality,
-          p.locality,
-          p.administrativeArea,
-          p.postalCode,
-          p.country,
+          p.street, p.subLocality, p.locality, p.administrativeArea, p.postalCode, p.country,
         ].where((e) => e != null && e.isNotEmpty).join(', ');
-        
-        _addressCtrl.text = address;
       }
     } catch (e) {
       if (mounted) {
@@ -99,6 +117,11 @@ class _ClinicCreationScreenState
   }
 
   Future<void> _createClinic() async {
+    // Before creating, if coords are empty but address exists, try one last verify
+    if (_latCtrl.text.isEmpty && _addressCtrl.text.isNotEmpty) {
+      await _verifyAddress();
+    }
+
     if (!(_formKey.currentState?.validate() ?? false)) return;
 
     final user = ref.read(authStateProvider).value;
@@ -108,36 +131,37 @@ class _ClinicCreationScreenState
           doctorId: user.uid,
           clinicName: _nameCtrl.text.trim(),
           address: _addressCtrl.text.trim(),
-          latitude: double.parse(_latCtrl.text.trim()),
-          longitude: double.parse(_lngCtrl.text.trim()),
+          latitude: double.tryParse(_latCtrl.text.trim()) ?? 0.0,
+          longitude: double.tryParse(_lngCtrl.text.trim()) ?? 0.0,
         );
 
     if (!mounted) return;
     final state = ref.read(clinicNotifierProvider);
+    
     if (state.hasError) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(
-              state.error.toString().replaceAll('Exception: ', '')),
+          content: Text(state.error.toString().replaceAll('Exception: ', '')),
           backgroundColor: AppColors.error,
         ),
       );
+    } else {
+      context.go(AppRoutes.documentUpload);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final clinicState = ref.watch(clinicNotifierProvider);
-    final isLoading = clinicState.isLoading || _isLocating;
+    final isLoading = clinicState.isLoading || _isLocating || _isVerifyingAddress;
 
     return LoadingOverlay(
       isLoading: isLoading,
-      message: _isLocating ? 'Fetching precise location...' : 'Creating clinic...',
+      message: _isVerifyingAddress ? 'Verifying address...' : 'Processing...',
       child: Scaffold(
         backgroundColor: AppColors.background,
         body: Container(
-          decoration:
-              const BoxDecoration(gradient: AppColors.backgroundGradient),
+          decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
           child: SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(24),
@@ -148,119 +172,59 @@ class _ClinicCreationScreenState
                     onPressed: () => context.pop(),
                     icon: const Icon(Icons.arrow_back_ios_new_rounded),
                     color: AppColors.textSecondary,
-                    padding: EdgeInsets.zero,
                   ),
                   const SizedBox(height: 12),
-
-                  Text(
-                    'Step 2 of 3',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppColors.brandCyan,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 1,
-                        ),
-                  ).animate().fadeIn(),
-                  const SizedBox(height: 8),
-
-                  const GradientHeading('Set Up\nYour Clinic 🏥')
-                      .animate(delay: 50.ms)
-                      .fadeIn()
-                      .slideY(begin: -0.2),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Clinic location is used by patients to find you on the map.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ).animate(delay: 100.ms).fadeIn(),
-
+                  const GradientHeading('Set Up\nYour Clinic 🏥'),
                   const SizedBox(height: 32),
-
-                  // Clinic form
                   AuthFormCard(
                     child: Form(
                       key: _formKey,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          // Clinic name
                           AppTextField(
                             controller: _nameCtrl,
                             label: 'Clinic Name',
                             hint: 'MediSync City Clinic',
-                            prefixIcon: const Icon(
-                                Icons.local_hospital_outlined,
-                                size: 18),
+                            prefixIcon: const Icon(Icons.local_hospital_outlined, size: 18),
                             validator: Validators.clinicName,
                           ),
                           const SizedBox(height: 14),
-
-                          // Address
-                          AppTextField(
-                            controller: _addressCtrl,
-                            label: 'Address',
-                            hint: '42 Main Street, Mumbai, Maharashtra',
-                            prefixIcon: const Icon(Icons.location_on_outlined,
-                                size: 18),
-                            validator: Validators.address,
-                            maxLines: 2,
-                            textInputAction: TextInputAction.newline,
+                          Focus(
+                            onFocusChange: (hasFocus) {
+                              if (!hasFocus) _verifyAddress(); // Auto-verify when field loses focus
+                            },
+                            child: AppTextField(
+                              controller: _addressCtrl,
+                              label: 'Address',
+                              hint: '42 Main Street, Mumbai, Maharashtra',
+                              prefixIcon: const Icon(Icons.location_on_outlined, size: 18),
+                              validator: Validators.address,
+                              maxLines: 2,
+                              keyboardType: TextInputType.multiline,
+                              textInputAction: TextInputAction.done,
+                            ),
                           ),
                           const SizedBox(height: 12),
-
-                          // NEW: Get location button
                           OutlinedButton.icon(
                             onPressed: _isLocating ? null : _fetchCurrentLocation,
                             icon: const Icon(Icons.my_location_rounded, size: 18),
                             label: const Text('Use Current Location'),
                             style: OutlinedButton.styleFrom(
                               minimumSize: const Size(double.infinity, 44),
-                              side: BorderSide(color: AppColors.brandCyan.withOpacity(0.5)),
                               foregroundColor: AppColors.brandCyan,
                             ),
                           ),
-
                           const SizedBox(height: 20),
-
-                          // Location section header
-                          Row(
-                            children: [
-                              const Icon(
-                                Icons.gps_fixed_rounded,
-                                size: 16,
-                                color: AppColors.brandCyan,
-                              ),
-                              const SizedBox(width: 8),
-                              Text(
-                                'GPS Coordinates',
-                                style: Theme.of(context)
-                                    .textTheme
-                                    .titleSmall
-                                    ?.copyWith(
-                                      color: AppColors.brandCyan,
-                                    ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            'Fetched automatically or entered manually.',
-                            style:
-                                Theme.of(context).textTheme.bodySmall?.copyWith(
-                                      color: AppColors.textHint,
-                                    ),
-                          ),
-                          const SizedBox(height: 12),
-
                           Row(
                             children: [
                               Expanded(
                                 child: AppTextField(
                                   controller: _latCtrl,
                                   label: 'Latitude',
-                                  hint: '28.7041',
-                                  keyboardType: const TextInputType
-                                      .numberWithOptions(decimal: true),
-                                  prefixIcon: const Icon(Icons.north, size: 16),
-                                  validator: Validators.latitude,
+                                  hint: 'Lat',
+                                  enabled: false, // Protected, filled by geocoding
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 ),
                               ),
                               const SizedBox(width: 12),
@@ -268,35 +232,24 @@ class _ClinicCreationScreenState
                                 child: AppTextField(
                                   controller: _lngCtrl,
                                   label: 'Longitude',
-                                  hint: '77.1025',
-                                  keyboardType: const TextInputType
-                                      .numberWithOptions(decimal: true),
-                                  prefixIcon: const Icon(Icons.east, size: 16),
-                                  validator: Validators.longitude,
-                                  textInputAction: TextInputAction.done,
+                                  hint: 'Lng',
+                                  enabled: false, // Protected, filled by geocoding
+                                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
                                 ),
                               ),
                             ],
                           ),
-
                           const SizedBox(height: 24),
                           AppButton(
                             label: 'Create Clinic',
                             onPressed: _createClinic,
                             isLoading: isLoading,
-                            icon: const Icon(Icons.add_business_rounded,
-                                size: 18),
-                          ),
-                          const SizedBox(height: 12),
-                          AppButton(
-                            label: 'Do this later',
-                            variant: AppButtonVariant.ghost,
-                            onPressed: () => context.go('/home'),
+                            icon: const Icon(Icons.add_business_rounded, size: 18),
                           ),
                         ],
                       ),
                     ),
-                  ).animate(delay: 200.ms).fadeIn().slideY(begin: 0.2),
+                  ),
                 ],
               ),
             ),

@@ -9,6 +9,7 @@ class ClinicEntity extends Equatable {
     required this.latitude,
     required this.longitude,
     required this.doctorId,
+    required this.doctorName, // NEW: Added for patient-app optimization
     required this.staffIds,
     required this.rating,
     required this.ratingCount,
@@ -24,19 +25,14 @@ class ClinicEntity extends Equatable {
   final double latitude;
   final double longitude;
   final String doctorId;
+  final String doctorName; // NEW: The primary doctor's name
   final List<String> staffIds;
   final double rating;
   final int ratingCount;
   final DateTime createdAt;
 
-  /// Whether the clinic is currently accepting new tokens/patients.
-  /// When true, patients can see this clinic as "Live" in the patient app.
   final bool isSessionActive;
-
-  /// Total number of tokens issued in the current session/day.
   final int totalTokensIssuedToday;
-
-  /// Time when the doctor/receptionist started the session.
   final DateTime? serviceStartTime;
 
   ClinicEntity copyWith({
@@ -46,6 +42,7 @@ class ClinicEntity extends Equatable {
     double? latitude,
     double? longitude,
     String? doctorId,
+    String? doctorName,
     List<String>? staffIds,
     double? rating,
     int? ratingCount,
@@ -61,6 +58,7 @@ class ClinicEntity extends Equatable {
       latitude: latitude ?? this.latitude,
       longitude: longitude ?? this.longitude,
       doctorId: doctorId ?? this.doctorId,
+      doctorName: doctorName ?? this.doctorName,
       staffIds: staffIds ?? this.staffIds,
       rating: rating ?? this.rating,
       ratingCount: ratingCount ?? this.ratingCount,
@@ -80,6 +78,7 @@ class ClinicEntity extends Equatable {
         latitude,
         longitude,
         doctorId,
+        doctorName,
         staffIds,
         rating,
         ratingCount,

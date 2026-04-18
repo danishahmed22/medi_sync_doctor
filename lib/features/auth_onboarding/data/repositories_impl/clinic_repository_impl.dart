@@ -17,7 +17,7 @@ class ClinicRepositoryImpl implements ClinicRepository {
     required double longitude,
   }) async {
     final model = ClinicModel(
-      clinicId: '', // Will be assigned by Firestore
+      clinicId: '', 
       clinicName: clinicName,
       address: address,
       latitude: latitude,
@@ -50,5 +50,12 @@ class ClinicRepositoryImpl implements ClinicRepository {
   Future<ClinicEntity?> getClinicById(String clinicId) async {
     final model = await _datasource.getClinicById(clinicId);
     return model?.toEntity();
+  }
+
+  @override
+  Stream<ClinicEntity?> watchClinicById(String clinicId) {
+    return _datasource
+        .watchClinic(clinicId)
+        .map((model) => model?.toEntity());
   }
 }

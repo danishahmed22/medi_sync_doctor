@@ -6,8 +6,6 @@ import 'package:medisync_doctor/features/auth_onboarding/data/models/invite_mode
 import 'package:medisync_doctor/features/auth_onboarding/data/models/medical_staff_model.dart';
 
 /// Low-level Firestore CRUD operations for all collections.
-///
-/// All [FirebaseException]s are caught and rethrown as [FirestoreException].
 class FirestoreDatasource {
   FirestoreDatasource({FirebaseFirestore? db})
       : _db = db ?? FirebaseFirestore.instance;
@@ -31,7 +29,6 @@ class FirestoreDatasource {
 
   // ── uniqueId generation ───────────────────────────────────────────────────
 
-  /// Atomically increments the counter and returns a 7-digit uniqueId string.
   Future<String> generateUniqueId() async {
     try {
       return await _db.runTransaction<String>((txn) async {
@@ -82,23 +79,11 @@ class FirestoreDatasource {
     }
   }
 
-  /// Appends [clinicId] to a staff member's clinicIds array.
   Future<void> addClinicToStaff(String userId, String clinicId) async {
     try {
       await _staffCol.doc(userId).update({
         'clinicIds': FieldValue.arrayUnion([clinicId]),
-      });
-    } on FirebaseException catch (e) {
-      throw FirestoreException.fromFirebase(e.code, e.message);
-    }
-  }
-
-  /// Appends a document record to the staff member's documents array.
-  Future<void> addDocumentToStaff(
-      String userId, Map<String, dynamic> docMap) async {
-    try {
-      await _staffCol.doc(userId).update({
-        'documents': FieldValue.arrayUnion([docMap]),
+        'currentClinicId': clinicId,
       });
     } on FirebaseException catch (e) {
       throw FirestoreException.fromFirebase(e.code, e.message);
@@ -109,6 +94,11 @@ class FirestoreDatasource {
 
   Future<ClinicModel> createClinic(ClinicModel model) async {
     try {
+      final doctorSnap = await _staffCol.doc(model.doctorId).get();
+      final doctorName = doctorSnap.exists 
+          ? (doctorSnap.data()?['name'] as String? ?? 'Doctor')
+          : 'Doctor';
+
       final ref = _clinicsCol.doc();
       final withId = ClinicModel(
         clinicId: ref.id,
@@ -117,20 +107,28 @@ class FirestoreDatasource {
         latitude: model.latitude,
         longitude: model.longitude,
         doctorId: model.doctorId,
-        staffIds: model.staffIds,
-        rating: model.rating,
-        ratingCount: model.ratingCount,
-        createdAt: model.createdAt,
+        doctorName: doctorName,
+        staffIds: [model.doctorId],
+        rating: 0.0,
+        ratingCount: 0,
+        createdAt: DateTime.now(),
+        isSessionActive: false,
+        totalTokensIssuedToday: 0,
       );
+      
       await ref.set(withId.toFirestore());
-
-      // Also add the clinicId to the doctor's clinicIds list.
       await addClinicToStaff(model.doctorId, ref.id);
-
       return withId;
     } on FirebaseException catch (e) {
       throw FirestoreException.fromFirebase(e.code, e.message);
     }
+  }
+
+  Stream<ClinicModel?> watchClinic(String clinicId) {
+    return _clinicsCol.doc(clinicId).snapshots().map((snap) {
+      if (!snap.exists) return null;
+      return ClinicModel.fromFirestore(snap);
+    });
   }
 
   Stream<List<ClinicModel>> watchClinicsByDoctor(String doctorId) {
@@ -144,7 +142,6 @@ class FirestoreDatasource {
 
   Stream<List<ClinicModel>> watchClinicsByIds(List<String> clinicIds) {
     if (clinicIds.isEmpty) return Stream.value([]);
-    // Firestore 'whereIn' supports up to 30 values.
     return _clinicsCol
         .where(FieldPath.documentId, whereIn: clinicIds)
         .snapshots()
@@ -162,7 +159,6 @@ class FirestoreDatasource {
     }
   }
 
-  /// Appends a staffId to the clinic's staffIds array.
   Future<void> addStaffToClinic(String clinicId, String staffId) async {
     try {
       await _clinicsCol.doc(clinicId).update({
@@ -172,8 +168,6 @@ class FirestoreDatasource {
       throw FirestoreException.fromFirebase(e.code, e.message);
     }
   }
-
-  // ── invites CRUD ──────────────────────────────────────────────────────────
 
   Future<InviteModel> createInvite(InviteModel model) async {
     try {
@@ -227,6 +221,17 @@ class FirestoreDatasource {
   Future<void> updateInviteStatus(String inviteId, String status) async {
     try {
       await _invitesCol.doc(inviteId).update({'status': status});
+    } on FirebaseException catch (e) {
+      throw FirestoreException.fromFirebase(e.code, e.message);
+    }
+  }
+
+  Future<void> addDocumentToStaff(
+      String userId, Map<String, dynamic> docMap) async {
+    try {
+      await _staffCol.doc(userId).update({
+        'documents': FieldValue.arrayUnion([docMap]),
+      });
     } on FirebaseException catch (e) {
       throw FirestoreException.fromFirebase(e.code, e.message);
     }

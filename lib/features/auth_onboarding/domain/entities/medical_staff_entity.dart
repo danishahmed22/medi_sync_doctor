@@ -1,9 +1,6 @@
 import 'package:equatable/equatable.dart';
 
 /// MedicalStaff domain entity.
-///
-/// Plain Dart class — zero dependency on Firebase or any external package.
-/// DTOs (data layer models) are mapped to this entity before use in the domain.
 class MedicalStaffEntity extends Equatable {
   const MedicalStaffEntity({
     required this.userId,
@@ -21,44 +18,25 @@ class MedicalStaffEntity extends Equatable {
     required this.documents,
     required this.createdAt,
     this.currentToken = 0,
+    this.totalToken = 0, // NEW: Tracks cumulative patients handled
   });
 
-  /// Firebase Auth UID — primary document key.
   final String userId;
-
-  /// 7-digit zero-padded unique human-readable ID (e.g. "0042317").
   final String uniqueId;
-
   final String name;
   final String email;
   final String phone;
-  final String role; // 'doctor' | 'compounder' | 'receptionist'
+  final String role;
   final String specialistIn;
-
-  /// List of clinic IDs this staff member belongs to.
   final List<String> clinicIds;
-
-  /// Currently active clinic (stored locally via SharedPreferences).
   final String? currentClinicId;
-
   final bool isVerified;
-
-  /// Average rating (0.0 – 5.0). Written only by the patient app.
   final double rating;
-
-  /// Total number of ratings received.
   final int ratingCount;
-
-  /// Uploaded verification documents.
   final List<DocumentInfo> documents;
-
   final DateTime createdAt;
-
-  /// The active token number currently being served by this doctor.
-  /// Used for the clinic flow counter system.
   final int currentToken;
-
-  // ── Helpers ────────────────────────────────────────────────────────────────
+  final int totalToken; // NEW
 
   bool get isDoctor => role == 'doctor';
   bool get isCompounder => role == 'compounder';
@@ -81,6 +59,7 @@ class MedicalStaffEntity extends Equatable {
     List<DocumentInfo>? documents,
     DateTime? createdAt,
     int? currentToken,
+    int? totalToken,
   }) {
     return MedicalStaffEntity(
       userId: userId ?? this.userId,
@@ -98,6 +77,7 @@ class MedicalStaffEntity extends Equatable {
       documents: documents ?? this.documents,
       createdAt: createdAt ?? this.createdAt,
       currentToken: currentToken ?? this.currentToken,
+      totalToken: totalToken ?? this.totalToken,
     );
   }
 
@@ -118,29 +98,19 @@ class MedicalStaffEntity extends Equatable {
         documents,
         createdAt,
         currentToken,
+        totalToken,
       ];
 }
 
-/// Value object representing a single uploaded document.
 class DocumentInfo extends Equatable {
   const DocumentInfo({
     required this.type,
     required this.url,
     required this.uploadedAt,
   });
-
-  final String type;    // DocumentType.firestoreValue
-  final String url;     // Firebase Storage download URL
+  final String type;
+  final String url;
   final DateTime uploadedAt;
-
-  DocumentInfo copyWith({String? type, String? url, DateTime? uploadedAt}) {
-    return DocumentInfo(
-      type: type ?? this.type,
-      url: url ?? this.url,
-      uploadedAt: uploadedAt ?? this.uploadedAt,
-    );
-  }
-
   @override
   List<Object?> get props => [type, url, uploadedAt];
 }

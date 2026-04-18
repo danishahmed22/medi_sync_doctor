@@ -10,6 +10,7 @@ class ClinicModel {
     required this.latitude,
     required this.longitude,
     required this.doctorId,
+    this.doctorName = '', // FIXED: Made optional with default for compatibility
     required this.staffIds,
     required this.rating,
     required this.ratingCount,
@@ -25,6 +26,7 @@ class ClinicModel {
   final double latitude;
   final double longitude;
   final String doctorId;
+  final String doctorName;
   final List<String> staffIds;
   final double rating;
   final int ratingCount;
@@ -44,6 +46,7 @@ class ClinicModel {
       latitude: (data['latitude'] as num?)?.toDouble() ?? 0.0,
       longitude: (data['longitude'] as num?)?.toDouble() ?? 0.0,
       doctorId: data['doctorId'] as String? ?? '',
+      doctorName: data['doctorName'] as String? ?? '',
       staffIds: List<String>.from(data['staffIds'] as List? ?? []),
       rating: (data['rating'] as num?)?.toDouble() ?? 0.0,
       ratingCount: data['ratingCount'] as int? ?? 0,
@@ -63,6 +66,7 @@ class ClinicModel {
       'latitude': latitude,
       'longitude': longitude,
       'doctorId': doctorId,
+      'doctorName': doctorName,
       'staffIds': staffIds,
       'rating': rating,
       'ratingCount': ratingCount,
@@ -84,6 +88,7 @@ class ClinicModel {
       latitude: latitude,
       longitude: longitude,
       doctorId: doctorId,
+      doctorName: doctorName,
       staffIds: staffIds,
       rating: rating,
       ratingCount: ratingCount,
@@ -101,6 +106,7 @@ class ClinicModel {
         latitude: entity.latitude,
         longitude: entity.longitude,
         doctorId: entity.doctorId,
+        doctorName: entity.doctorName,
         staffIds: entity.staffIds,
         rating: entity.rating,
         ratingCount: entity.ratingCount,

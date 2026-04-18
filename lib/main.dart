@@ -8,7 +8,7 @@ import 'package:medisync_doctor/core/theme/app_theme.dart';
 import 'package:medisync_doctor/features/auth_onboarding/presentation/providers/auth_provider.dart';
 
 // IMPORTANT: Once you run 'flutterfire configure', uncomment the next line:
-// import 'package:medisync_doctor/firebase_options.dart';
+import 'package:medisync_doctor/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -34,7 +34,7 @@ void main() async {
     // If you have NOT run 'flutterfire configure' yet, it will look for 
     // google-services.json (Android) or GoogleService-Info.plist (iOS).
     await Firebase.initializeApp(
-      // options: DefaultFirebaseOptions.currentPlatform, // Uncomment after running flutterfire configure
+      options: DefaultFirebaseOptions.currentPlatform, // Uncomment after running flutterfire configure
     );
   } catch (e) {
     debugPrint('Firebase initialization failed: $e');

@@ -14,6 +14,8 @@ class AppButton extends StatelessWidget {
     this.icon,
     this.width,
     this.height = 52,
+    this.backgroundColor,
+    this.foregroundColor,
   });
 
   final String label;
@@ -23,6 +25,8 @@ class AppButton extends StatelessWidget {
   final Widget? icon;
   final double? width;
   final double height;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
@@ -37,6 +41,8 @@ class AppButton extends StatelessWidget {
             isLoading: isLoading,
             icon: icon,
             tt: tt,
+            backgroundColor: backgroundColor,
+            foregroundColor: foregroundColor,
           ),
         AppButtonVariant.secondary => _SecondaryButton(
             label: label,
@@ -51,6 +57,10 @@ class AppButton extends StatelessWidget {
                 ? const _LoadingIndicator(color: AppColors.brandCyan)
                 : (icon ?? const SizedBox.shrink()),
             label: Text(label),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: foregroundColor,
+              backgroundColor: backgroundColor,
+            ),
           ),
         AppButtonVariant.ghost => TextButton.icon(
             onPressed: isLoading ? null : onPressed,
@@ -69,6 +79,8 @@ class _GradientButton extends StatelessWidget {
     required this.isLoading,
     required this.tt,
     this.icon,
+    this.backgroundColor,
+    this.foregroundColor,
   });
 
   final String label;
@@ -76,17 +88,20 @@ class _GradientButton extends StatelessWidget {
   final bool isLoading;
   final TextTheme tt;
   final Widget? icon;
+  final Color? backgroundColor;
+  final Color? foregroundColor;
 
   @override
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: onPressed == null
+        color: backgroundColor,
+        gradient: (onPressed == null && backgroundColor == null)
             ? const LinearGradient(
                 colors: [AppColors.textHint, AppColors.textHint])
-            : AppColors.brandGradient,
+            : (backgroundColor != null ? null : AppColors.brandGradient),
         borderRadius: BorderRadius.circular(12),
-        boxShadow: onPressed == null
+        boxShadow: (onPressed == null || backgroundColor != null)
             ? null
             : [
                 BoxShadow(
@@ -103,7 +118,7 @@ class _GradientButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: Center(
             child: isLoading
-                ? const _LoadingIndicator(color: AppColors.background)
+                ? _LoadingIndicator(color: foregroundColor ?? AppColors.background)
                 : Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
@@ -114,7 +129,7 @@ class _GradientButton extends StatelessWidget {
                       Text(
                         label,
                         style: tt.labelLarge?.copyWith(
-                          color: AppColors.background,
+                          color: foregroundColor ?? AppColors.background,
                           fontWeight: FontWeight.w700,
                           fontSize: 15,
                         ),
